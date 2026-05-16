@@ -2,6 +2,10 @@ import smtplib
 import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import hashlib
+import os
+import hmac
+
 
 def send_otp_email(receiver_email: str, otp: str):
     smtp_server = os.getenv("SMTP_SERVER", "smtp-relay.brevo.com")
@@ -35,4 +39,20 @@ def send_otp_email(receiver_email: str, otp: str):
         return True
     except Exception as e:
         print(f"SMTP Error: {e}")
+        return False
+
+def hash_password(password: str) -> str:
+    salt = os.urandom(16).hex()
+    # Combine salt and password string
+    sha256 = hashlib.sha256()
+    sha256.update(f"{salt}{password}".encode('utf-8'))
+    return f"{salt}.{sha256.hexdigest()}"
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        salt, stored_hash = hashed_password.split('.')
+        sha256 = hashlib.sha256()
+        sha256.update(f"{salt}{plain_password}".encode('utf-8'))
+        return hmac.compare_digest(sha256.hexdigest(), stored_hash)
+    except Exception:
         return False

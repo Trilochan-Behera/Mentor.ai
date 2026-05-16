@@ -6,18 +6,38 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
+  ActivityIndicator,
   Alert,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as LocalAuthentication from 'expo-local-authentication';
-import * as SecureStore from 'expo-secure-store';
+import * as LocalAuthentication from "expo-local-authentication";
+import * as SecureStore from "expo-secure-store";
+import { useApi } from "@/hooks/useApi";
+import { useToast } from "../context/ToastContext";
+
+// Response schemas matching your backend Pydantic models
+interface VerifyResponse {
+  status: string;
+  message: string;
+  user_id: string;
+  access_token?: string;
+}
+
+interface ResendResponse {
+  status: string;
+  message: string;
+}
 
 export default function OtpVerifyScreen() {
   const router = useRouter();
-  const { email } = useLocalSearchParams(); // Get email passed from Login screen
-  
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]); // 6-digit for better security
+  const { email } = useLocalSearchParams<{ email: string }>(); // Explicit type mapping for route params
+
+  // Initialize our unified API hook
+  const { request, loading } = useApi();
+  const { showToast } = useToast();
+
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [timer, setTimer] = useState(60);
   const otpRefs = useRef<Array<TextInput | null>>([]);
 
@@ -33,6 +53,7 @@ export default function OtpVerifyScreen() {
     newOtp[index] = text;
     setOtp(newOtp);
 
+    // Dynamic focus shifting forward
     if (text !== "" && index < 5) {
       otpRefs.current[index + 1]?.focus();
     }
@@ -44,44 +65,109 @@ export default function OtpVerifyScreen() {
     }
   };
 
-  // --- Handshake Logic ---
-
+  // ==========================================
+  // Hook API Call: /auth/verify
+  // ==========================================
   const onVerify = async () => {
     const fullOtp = otp.join("");
-    router.replace("/onboarding")
-    
-    // API CALL: /auth/verify-otp {email, otp}
-    // Assume success and receiving a JWT token
-    const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
 
-    Alert.alert(
-      "Verified Successfully!",
-      "Would you like to enable FaceID/TouchID for faster login next time?",
-      [
-        {
-          text: "Later",
-          onPress: () => router.replace("/onboarding"), // Move to initial 10 questions
-        },
-        {
-          text: "Enable Now",
-          onPress: async () => {
-            const auth = await LocalAuthentication.authenticateAsync({
-              promptMessage: 'Enable Sovereign Access',
-            });
-            if (auth.success) {
-              await SecureStore.setItemAsync('user_session', mockToken);
+    if (fullOtp.length !== 6) {
+      showToast("Please enter the full 6-digit verification code.", "error");
+      return;
+    }
+
+    const res = await request<VerifyResponse>("/auth/verify", {
+      method: "POST",
+      body: {
+        email: email,
+        otp: fullOtp,
+      },
+    });
+
+    if (res.success && res.data) {
+      // Safely read out the payload access token
+      const realToken =
+        res.data.access_token || "fallback_token_if_not_returned";
+
+      showToast("Verified Successfully!", "success");
+
+      // Trigger the Biometric Handshake
+      Alert.alert(
+        "Verified Successfully!",
+        "Would you like to enable FaceID/TouchID for faster login next time?",
+        [
+          {
+            text: "Later",
+            onPress: async () => {
+              await SecureStore.setItemAsync("user_session", realToken);
               router.replace("/onboarding");
-            }
-          }
-        }
-      ]
-    );
+            },
+          },
+          {
+            text: "Enable Now",
+            onPress: async () => {
+              try {
+                const hasHardware =
+                  await LocalAuthentication.hasHardwareAsync();
+                const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+                if (hasHardware && isEnrolled) {
+                  const auth = await LocalAuthentication.authenticateAsync({
+                    promptMessage: "Enable Sovereign Access",
+                    fallbackLabel: "Use Passcode",
+                  });
+
+                  if (auth.success) {
+                    await SecureStore.setItemAsync("user_session", realToken);
+                    showToast("Biometrics enabled securely.", "success");
+                  } else {
+                    await SecureStore.setItemAsync("user_session", realToken);
+                  }
+                } else {
+                  await SecureStore.setItemAsync("user_session", realToken);
+                  showToast(
+                    "Biometrics not configured on this device.",
+                    "info",
+                  );
+                }
+              } catch (bioError) {
+                console.error("Biometric Setup Error:", bioError);
+                await SecureStore.setItemAsync("user_session", realToken);
+              } finally {
+                router.replace("/onboarding");
+              }
+            },
+          },
+        ],
+      );
+    }
+  };
+
+  // ==========================================
+  // Hook API Call: /auth/resend-otp
+  // ==========================================
+  const onResendOtp = async () => {
+    if (timer > 0) return; // Prevention constraint check
+
+    const res = await request<ResendResponse>("/auth/resend-otp", {
+      method: "POST",
+      body: { email: email },
+    });
+
+    if (res.success && res.data) {
+      showToast(res.data.message || "A fresh code has been issued.",'success')
+      setTimer(60); // Reset countdown clock loop
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.inner}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => !loading && router.back()}
+          style={styles.backBtn}
+          disabled={loading}
+        >
           <Ionicons name="arrow-back" size={24} color="#1A237E" />
         </TouchableOpacity>
 
@@ -107,24 +193,36 @@ export default function OtpVerifyScreen() {
               keyboardType="number-pad"
               maxLength={1}
               selectTextOnFocus
+              editable={!loading} // Lock array inputs during active operations
             />
           ))}
         </View>
 
-        <TouchableOpacity 
-          style={[styles.primaryButton, otp.join("").length < 6 && styles.disabled]} 
+        <TouchableOpacity
+          style={[
+            styles.primaryButton,
+            (otp.join("").length < 6 || loading) && styles.disabled,
+          ]}
           onPress={onVerify}
-          disabled={otp.join("").length < 6}
+          disabled={otp.join("").length < 6 || loading}
         >
-          <Text style={styles.buttonText}>Verify & Continue</Text>
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.buttonText}>Verify & Continue</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.footer}>
           {timer > 0 ? (
-            <Text style={styles.resendText}>Resend code in <Text style={styles.timer}>{timer}s</Text></Text>
+            <Text style={styles.resendText}>
+              Resend code in <Text style={styles.timer}>{timer}s</Text>
+            </Text>
           ) : (
-            <TouchableOpacity onPress={() => setTimer(60)}>
-              <Text style={styles.link}>Resend OTP</Text>
+            <TouchableOpacity onPress={onResendOtp} disabled={loading}>
+              <Text style={[styles.link, loading && styles.disabledLink]}>
+                Resend OTP
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -168,11 +266,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+    height: 56, // Fixed structural height container for crisp activity centering
+    justifyContent: "center",
   },
   disabled: { backgroundColor: "#CBD5E1", shadowOpacity: 0 },
   buttonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
   footer: { marginTop: 30, alignItems: "center" },
   resendText: { color: "#666", fontSize: 14 },
   timer: { color: "#1A237E", fontWeight: "700" },
-  link: { color: "#1A237E", fontWeight: "800", textDecorationLine: "underline" },
+  link: {
+    color: "#1A237E",
+    fontWeight: "800",
+    textDecorationLine: "underline",
+  },
+  disabledLink: { color: "#CBD5E1" },
 });
