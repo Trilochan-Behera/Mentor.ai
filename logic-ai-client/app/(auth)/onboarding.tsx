@@ -7,27 +7,36 @@ import { useRouter } from 'expo-router';
 
 export default function EvolutionOnboarding() {
   const router = useRouter();
-  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
 
   const topics = [
-    { id: '1', name: 'Quant Analysis', icon: 'stats-chart' },
+    { id: '1', name: 'Quantitative Analysis', icon: 'stats-chart' },
     { id: '2', name: 'Logical Reasoning', icon: 'git-network' },
     { id: '3', name: 'Verbal Ability', icon: 'text' },
-    { id: '4', name: 'General Awareness', icon: 'earth' },
-    { id: '5', name: 'Data Interpretation', icon: 'pie-chart' },
-    { id: '6', name: 'Abstract Logic', icon: 'infinite' },
   ];
 
-  const toggleTopic = (name: string) => {
-    setSelectedTopics(prev => 
-      prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name]
+  const toggleTopic = (id: string) => {
+    setSelectedTopicIds(prev => 
+      prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
     );
   };
 
   const getCalibrationMessage = () => {
-    if (selectedTopics.length === 0) return "Select your focus areas to begin calibration.";
-    if (selectedTopics.length < 3) return "Baseline established. Add more for a deeper analysis.";
+    if (selectedTopicIds.length === 0) return "Select your focus areas to begin calibration.";
+    if (selectedTopicIds.length < 3) return "Baseline established. Add more for a deeper analysis.";
     return "Optimal data points reached. Ready for evolution.";
+  };
+
+  const handleBeginEvolution = () => {
+    if (selectedTopicIds.length === 0) return;
+    
+    // Joint items array map string conversion ('1,2,3')
+    const topicsParam = selectedTopicIds.join(',');
+    
+    router.push({
+      pathname: '/diagnostic',
+      params: { topics: topicsParam, email: 'trilochanbeherak@gmai.com' }
+    });
   };
 
   return (
@@ -40,7 +49,7 @@ export default function EvolutionOnboarding() {
           
           <View style={styles.messageBox}>
             <Animatable.Text 
-              key={selectedTopics.length} 
+              key={selectedTopicIds.length} 
               animation="fadeInLeft" 
               duration={500} 
               style={styles.messageText}
@@ -52,7 +61,7 @@ export default function EvolutionOnboarding() {
 
         <View style={styles.grid}>
           {topics.map((item, index) => {
-            const isActive = selectedTopics.includes(item.name);
+            const isActive = selectedTopicIds.includes(item.id);
             return (
               <Animatable.View 
                 key={item.id} 
@@ -61,7 +70,7 @@ export default function EvolutionOnboarding() {
                 style={{ width: '48%', marginBottom: 15 }}
               >
                 <TouchableOpacity 
-                  onPress={() => toggleTopic(item.name)}
+                  onPress={() => toggleTopic(item.id)}
                   activeOpacity={0.9}
                   style={[styles.topicCard, isActive && styles.topicCardActive]}
                 >
@@ -83,14 +92,13 @@ export default function EvolutionOnboarding() {
             );
           })}
         </View>
-
       </ScrollView>
 
       <View style={styles.footer}>
         <TouchableOpacity 
-          disabled={selectedTopics.length === 0}
-          onPress={() => router.push('/diagnostic')}
-          style={[styles.mainBtn, selectedTopics.length === 0 && { opacity: 0.5 }]}
+          disabled={selectedTopicIds.length === 0}
+          onPress={handleBeginEvolution}
+          style={[styles.mainBtn, selectedTopicIds.length === 0 && { opacity: 0.5 }]}
         >
           <LinearGradient
             colors={['#1A237E', '#3F51B5']}
@@ -107,6 +115,7 @@ export default function EvolutionOnboarding() {
   );
 }
 
+// Keep your existing styles unchanged...
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   scroll: { padding: 25, paddingTop: 50 },

@@ -12,11 +12,13 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
   headers?: Record<string, string>;
   body?: Record<string, any>;
+  service?: "auth" | "eval";
 }
 
 // Using a fallback local IP ensures your networking layer continues working if your Expo cache clears out
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-console.log(API_BASE_URL, "API_BASE_URL connected");
+const API_AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL;
+const API_EVAL_URL = process.env.EXPO_PUBLIC_EVAL_URL;
+console.log(API_AUTH_URL, "API_BASE_URL connected");
 
 export const useApi = () => {
   const [loading, setLoading] = useState<boolean>(false);
@@ -33,7 +35,8 @@ export const useApi = () => {
       setLoading(true);
       setError(null);
 
-      const url = `${API_BASE_URL}${endpoint}`;
+      const baseUrl = options.service === "eval" ? API_EVAL_URL : API_AUTH_URL;
+      const url = `${baseUrl}${endpoint}`;
 
       const defaultHeaders: Record<string, string> = {
         "Content-Type": "application/json",

@@ -90,56 +90,56 @@ export default function OtpVerifyScreen() {
         res.data.access_token || "fallback_token_if_not_returned";
 
       showToast("Verified Successfully!", "success");
-
+      router.replace("/onboarding");
       // Trigger the Biometric Handshake
-      Alert.alert(
-        "Verified Successfully!",
-        "Would you like to enable FaceID/TouchID for faster login next time?",
-        [
-          {
-            text: "Later",
-            onPress: async () => {
-              await SecureStore.setItemAsync("user_session", realToken);
-              router.replace("/onboarding");
-            },
-          },
-          {
-            text: "Enable Now",
-            onPress: async () => {
-              try {
-                const hasHardware =
-                  await LocalAuthentication.hasHardwareAsync();
-                const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      // Alert.alert(
+      //   "Verified Successfully!",
+      //   "Would you like to enable FaceID/TouchID for faster login next time?",
+      //   [
+      //     {
+      //       text: "Later",
+      //       onPress: async () => {
+      //         await SecureStore.setItemAsync("user_session", realToken);
+      //         router.replace("/onboarding");
+      //       },
+      //     },
+      //     {
+      //       text: "Enable Now",
+      //       onPress: async () => {
+      //         try {
+      //           const hasHardware =
+      //             await LocalAuthentication.hasHardwareAsync();
+      //           const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
-                if (hasHardware && isEnrolled) {
-                  const auth = await LocalAuthentication.authenticateAsync({
-                    promptMessage: "Enable Sovereign Access",
-                    fallbackLabel: "Use Passcode",
-                  });
+      //           if (hasHardware && isEnrolled) {
+      //             const auth = await LocalAuthentication.authenticateAsync({
+      //               promptMessage: "Enable Sovereign Access",
+      //               fallbackLabel: "Use Passcode",
+      //             });
 
-                  if (auth.success) {
-                    await SecureStore.setItemAsync("user_session", realToken);
-                    showToast("Biometrics enabled securely.", "success");
-                  } else {
-                    await SecureStore.setItemAsync("user_session", realToken);
-                  }
-                } else {
-                  await SecureStore.setItemAsync("user_session", realToken);
-                  showToast(
-                    "Biometrics not configured on this device.",
-                    "info",
-                  );
-                }
-              } catch (bioError) {
-                console.error("Biometric Setup Error:", bioError);
-                await SecureStore.setItemAsync("user_session", realToken);
-              } finally {
-                router.replace("/onboarding");
-              }
-            },
-          },
-        ],
-      );
+      //             if (auth.success) {
+      //               await SecureStore.setItemAsync("user_session", realToken);
+      //               showToast("Biometrics enabled securely.", "success");
+      //             } else {
+      //               await SecureStore.setItemAsync("user_session", realToken);
+      //             }
+      //           } else {
+      //             await SecureStore.setItemAsync("user_session", realToken);
+      //             showToast(
+      //               "Biometrics not configured on this device.",
+      //               "info",
+      //             );
+      //           }
+      //         } catch (bioError) {
+      //           console.error("Biometric Setup Error:", bioError);
+      //           await SecureStore.setItemAsync("user_session", realToken);
+      //         } finally {
+      //           router.replace("/onboarding");
+      //         }
+      //       },
+      //     },
+      //   ],
+      // );
     }
   };
 
@@ -155,7 +155,7 @@ export default function OtpVerifyScreen() {
     });
 
     if (res.success && res.data) {
-      showToast(res.data.message || "A fresh code has been issued.",'success')
+      showToast(res.data.message || "A fresh code has been issued.", "success");
       setTimer(60); // Reset countdown clock loop
     }
   };

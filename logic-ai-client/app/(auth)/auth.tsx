@@ -113,7 +113,7 @@ export default function LoginScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>
-            {isNewUser ? "Join the Hub" : "Welcome Back"}
+           Welcome Aspirants
           </Text>
           <Text style={styles.subtitle}>
             {isNewUser
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF" },
   inner: { flex: 1, padding: 30, justifyContent: "center" },
   header: { marginBottom: 40 },
-  title: { fontSize: 32, fontWeight: "900", color: "#1A237E" },
+  title: { fontSize: 30, fontWeight: "900", color: "#1A237E" },
   subtitle: { fontSize: 16, color: "#666", marginTop: 10 },
   form: { width: "100%" },
   inputContainer: {
