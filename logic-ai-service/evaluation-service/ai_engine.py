@@ -39,6 +39,6 @@ def generate_cognitive_profile(
 
     return {
         "cognitive_profile": profile,
-        "speed_rating": f"{pace_rating} ({avg_pace}s average per challenge block)",
+        "speed_rating": f"{pace_rating}",
         "recommended_focus": focus
     }

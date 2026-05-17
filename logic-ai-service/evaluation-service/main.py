@@ -218,6 +218,99 @@ async def generate_unique_practice_set(email: str = Query(...), topic_id: str = 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/evaluation/dashboard")
+async def get_user_dashboard_server_driven_ui(email: str = Query(...), db=Depends(get_db)):
+    """
+    Server-Driven UI Engine: Delivers structural layout, widget parameters, 
+    and metrics tokens inside a single unified payload configuration array.
+    """
+    print(f"\n⚡ [SERVER-DRIVEN UI FETCH] Compiling layout tree for: {email}")
+    try:
+        # 1. Fetch lifetime aggregate tracking matrix row
+        global_res = db.table("user_global_metrics").select("*").eq("user_email", email).execute()
+        has_history = len(global_res.data) > 0
+        
+        if has_history:
+            user_metrics = global_res.data[0]
+            accuracy = float(user_metrics.get("current_attempt_success_percentage", 0))
+            solved_count = user_metrics.get("total_attempted_questions", 0)
+            drills_run = user_metrics.get("total_attempts", 0)
+            
+            # Generate AI profiling text fields dynamically
+            mock_metrics = {
+                "guesses": user_metrics.get("total_guesses", 0),
+                "correct_but_slow": user_metrics.get("total_correct_but_slow", 0)
+            }
+            ai_profile = generate_cognitive_profile("1", accuracy, 60, 10, mock_metrics)
+            ai_debrief_text = ai_profile["cognitive_profile"]
+            ai_speed_rating = ai_profile["speed_rating"]
+            rank_title = "Expert" if accuracy >= 80 else "Pro II" if accuracy >= 65 else "Pro I" if accuracy >= 45 else "Novice"
+        else:
+            # Safe uncalibrated default tokens if the user hasn't run their evolution onboarding yet
+            accuracy = 0
+            solved_count = 0
+            drills_run = 0
+            ai_debrief_text = "Onboarding baseline uncalibrated. Complete your Phase 1 Evolution test to activate tracking."
+            ai_speed_rating = "Uncalibrated"
+            rank_title = "Novice"
+
+        # 2. Package the entire UI schema configuration dictionary tree
+        return {
+          "status": "success",
+          "ui_configuration": {
+            # Meta Header Nodes
+            "header": {
+              "welcome_title": "Hello, Operative",
+              "welcome_subtitle": "Let's smash today's goals.",
+              "show_notification_dot": drills_run > 0
+            },
+            # Badge Parameters Row Widget
+            "status_badges": {
+              "rank_label": f"Status: {rank_title}",
+              "drill_sequence_label": f"Attempts: #{drills_run}"
+            },
+            # Center Core Nexus Mastery Sphere Gauge
+            "mastery_sphere": {
+              "accuracy_percentage": round(accuracy),
+              "solved_count_nodes": solved_count,
+              "total_drills_nodes": drills_run
+            },
+            # Speed Metric Strip Widget
+            "performance_strip": {
+              "speed_rating_string": ai_speed_rating,
+              "tier_label": f"Rank: {rank_title}"
+            },
+            # Tactical Next Stage Recommendation Card (Controlled by backend architecture)
+            "next_mission_card": {
+              "title": "NEXT STAGE PATH",
+              "description": "Launch Phase 1 Evolution Drill" if drills_run == 0 else "Generate Unique Practice Matrix Set",
+              "action_slug": "evolution_drill" if drills_run == 0 else "practice_dashboard"
+            },
+            # AI Intelligence Debrief Module Panel
+            "ai_debrief_module": {
+              "title": "AI COGNITIVE DEBRIEF",
+              "profile_text": ai_debrief_text,
+              "stability_ratio": round(accuracy)
+            },
+            # Capability Bento Grid Parameters Tiles (Currently Static backend delivery blocks)
+            "capability_parameters": [
+              { "title": "Quant", "sub": "Calculations", "perc": 0 if drills_run == 0 else 92, "col": "#10B981", "icon": "calculator" },
+              { "title": "Logic", "sub": "Reasoning", "perc": 0 if drills_run == 0 else 65, "col": "#F59E0B", "icon": "git-branch" },
+              { "title": "Verbal", "sub": "Language", "perc": 0 if drills_run == 0 else 40, "col": "#EF4444", "icon": "text" },
+              { "title": "GS", "sub": "Awareness", "perc": 0 if drills_run == 0 else 15, "col": "#94A3B8", "icon": "globe" }
+            ],
+            # Exam Strategy Engine Row Arrays (Fixed string validation parsing errors)
+            "exam_strategy_engine": [
+              { "level": "Attempt First", "topics": "Reasoning, Syllogism", "color": "#10B981" },
+              { "level": "Medium Priority", "topics": "Arithmetic, Grammar", "color": "#3B82F6" },
+              { "level": "Careful Attempt", "topics": "Reading Comp, DI", "color": "#F59E0B" },
+              { "level": "Last Priority", "topics": "Probability, Puzzles", "color": "#EF4444" } # ✅ Added missing quote wrapper definitions
+            ]
+          }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8002, reload=True)
