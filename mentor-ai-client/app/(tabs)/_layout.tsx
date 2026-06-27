@@ -40,9 +40,9 @@ export default function TabLayout() {
           }}
         />
          <Tabs.Screen
-          name="ca"
+          name="smart"
           options={{
-            title: "CA",
+            title: "Smart",
             tabBarIcon: ({ color }) => (
               <Ionicons name="pulse-outline" size={24} color={color} />
             ),

@@ -110,9 +110,9 @@ export default function InitializationScreen() {
             "hasCompletedEvolution",
           );
 
-          if (hasCompleted !== "true") {
+          if (hasCompleted === "true") {
             // User already has an identity, go home
-            router.replace("/auth");
+            router.replace("/home");
           } else {
             // New user, send to onboarding flow
             router.replace("/onboarding");

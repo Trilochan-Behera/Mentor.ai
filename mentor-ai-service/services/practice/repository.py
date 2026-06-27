@@ -50,3 +50,15 @@ class PracticeRepository:
                       .eq("attempt_id", attempt_id)\
                       .eq("sub_topic", sub_topic)\
                       .execute()
+
+    def save_timetable_meta(self, payload: dict):
+        return self.db.table("user_timetables").upsert(payload, on_conflict="user_email").execute()
+
+    def save_timetable_days_bulk(self, day_records: list):
+        return self.db.table("user_timetable_days").upsert(day_records, on_conflict="user_email,study_date").execute()
+
+    def get_user_timetable_meta(self, email: str):
+        return self.db.table("user_timetables").select("*").eq("user_email", email).execute()
+
+    def get_current_day_target(self, email: str, target_date: str):
+        return self.db.table("user_timetable_days").select("*").eq("user_email", email).eq("study_date", target_date).execute()

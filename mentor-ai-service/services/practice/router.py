@@ -2,6 +2,11 @@
 import random
 from fastapi import APIRouter, Depends, HTTPException, Query
 from config.database import get_supabase_db
+from datetime import date, datetime, timedelta
+from .schemas import TimetableSetupPayload
+from .repository import PracticeRepository
+
+# Append these endpoints to your existing practice router file
 
 from .schemas import PracticeSetupPayload
 from .repository import PracticeRepository
@@ -272,4 +277,128 @@ async def get_subtopic_historical_recap(
         }
     except Exception as e:
         print(f"💥 Recap processing engine crash: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def compute_adaptive_schedule(total_days: int, topics: list, topic_metrics: list) -> list:
+    """
+    Allocates days across selected subjects inversely proportional to user accuracy.
+    Lower accuracy metrics receive larger time buffers.
+    """
+    # Map user stats (default to 40% if no historical rows are logged)
+    accuracy_map = {row["topic_id"]: float(row["accuracy_percentage"]) for row in topic_metrics}
+    
+    weights = {}
+    total_weight = 0.0
+    
+    for t_id in topics:
+        acc = accuracy_map.get(t_id, 40.0)
+        # Inverse mapping: lower accuracy = higher weight distribution factor
+        weight = max(10.0, 100.0 - acc) 
+        weights[t_id] = weight
+        total_weight += weight
+
+    schedule_distribution = []
+    allocated_days = 0
+    
+    for i, t_id in enumerate(topics):
+        if i == len(topics) - 1:
+            # Dump remainder days on the final element to avoid mathematical precision drop-offs
+            days_for_topic = total_days - allocated_days
+        else:
+            days_for_topic = int((weights[t_id] / total_weight) * total_days)
+            allocated_days += days_for_topic
+        
+        schedule_distribution.append({"topic_id": t_id, "days": max(1, days_for_topic)})
+        
+    return schedule_distribution
+
+@router.post("/timetable/generate")
+async def generate_user_adaptive_timetable(payload: TimetableSetupPayload, db=Depends(get_supabase_db)):
+    repo = PracticeRepository(db)
+    try:
+        total_days = (payload.end_date - payload.start_date).days
+        if total_days <= 0:
+            raise HTTPException(status_code=400, detail="End date must fall after your designated start bounds.")
+
+        # Gather real metric history to skew scheduling balances safely
+        metrics_res = repo.get_topic_metrics(payload.email)
+        allocations = compute_adaptive_schedule(total_days, payload.selected_topics, metrics_res.data)
+
+        # Meta blueprint payload configuration tracking
+        meta_payload = {
+            "user_email": payload.email,
+            "start_date": str(payload.start_date),
+            "end_date": str(payload.end_date),
+            "difficulty_preference": payload.difficulty_preference,
+            "selected_topics": payload.selected_topics,
+            "updated_at": "now()"
+        }
+        repo.save_timetable_meta(meta_payload)
+
+        # Build day-by-day item maps
+        day_records = []
+        current_cursor_date = payload.start_date
+        topic_titles = {"1": "Quantitative Aptitude", "2": "Logical Reasoning", "3": "Verbal Ability"}
+
+        for item in allocations:
+            for _ in range(item["days"]):
+                if current_cursor_date > payload.end_date:
+                    break
+                day_records.append({
+                    "user_email": payload.email,
+                    "study_date": str(current_cursor_date),
+                    "topic_id": item["topic_id"],
+                    "topic_title": topic_titles.get(item["topic_id"], "General Core Studies"),
+                    "is_completed": False
+                })
+                current_cursor_date += timedelta(days=1)
+
+        repo.save_timetable_days_bulk(day_records)
+        return {"status": "success", "total_days_allocated": total_days, "distribution_blueprint": allocations}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/timetable/refresh")
+async def sync_and_reallocate_timetable(email: str = Query(...), db=Depends(get_supabase_db)):
+    """
+    Recalibrates remaining timetable slots on the fly if milestones were missed.
+    Folds past uncompleted tasks forward into the remaining date buffers.
+    """
+    repo = PracticeRepository(db)
+    try:
+        meta_res = repo.get_user_timetable_meta(email)
+        if not meta_res.data:
+            raise HTTPException(status_code=404, detail="No active timetable template map found for user record.")
+        
+        meta = meta_res.data[0]
+        today_date = date.today()
+        end_date = datetime.strptime(meta["end_date"], "%Y-%m-%d").date()
+        
+        remaining_days = (end_date - today_date).days
+        if remaining_days <= 0:
+            raise HTTPException(status_code=400, detail="The active schedule timeframe has passed. Please map a new timeline tracker.")
+
+        metrics_res = repo.get_topic_metrics(email)
+        allocations = compute_adaptive_schedule(remaining_days, meta["selected_topics"], metrics_res.data)
+
+        day_records = []
+        current_cursor_date = today_date
+        topic_titles = {"1": "Quantitative Aptitude", "2": "Logical Reasoning", "3": "Verbal Ability"}
+
+        for item in allocations:
+            for _ in range(item["days"]):
+                if current_cursor_date > end_date:
+                    break
+                day_records.append({
+                    "user_email": email,
+                    "study_date": str(current_cursor_date),
+                    "topic_id": item["topic_id"],
+                    "topic_title": topic_titles.get(item["topic_id"], "General Core Studies"),
+                    "is_completed": False
+                })
+                current_cursor_date += timedelta(days=1)
+
+        repo.save_timetable_days_bulk(day_records)
+        return {"status": "success", "message": "Timeline adjustments balanced perfectly against your current performance metrics."}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
