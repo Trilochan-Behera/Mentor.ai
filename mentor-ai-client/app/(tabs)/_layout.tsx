@@ -48,15 +48,15 @@ export default function TabLayout() {
             ),
           }}
         />
-        {/* <Tabs.Screen
-          name="battle"
+        <Tabs.Screen
+          name="ca"
           options={{
-            title: "Battle",
+            title: "CA",
             tabBarIcon: ({ color }) => (
-              <Ionicons name="war" size={24} color={color} />
+              <Ionicons name="ca" size={24} color={color} />
             ),
           }}
-        /> */}
+        />
         <Tabs.Screen
           name="profile"
           options={{
